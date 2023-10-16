@@ -1,0 +1,46 @@
+From 3640d6bd65efeb808f7cace7c87ee12fb4994c4b Mon Sep 17 00:00:00 2001
+From: Louis Abel <label@rockylinux.org>
+Date: Sat, 14 Oct 2023 10:43:40 -0700
+Subject: [PATCH] Debrand
+
+---
+ SPECS/fwupd.spec | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/SPECS/fwupd.spec b/SPECS/fwupd.spec
+index 03d4fa2..37bf590 100644
+--- a/SPECS/fwupd.spec
++++ b/SPECS/fwupd.spec
+@@ -61,6 +61,10 @@ Source301:   redhatsecureboot301.cer
+ Source500:   redhatsecurebootca5.cer
+ Source503:   redhatsecureboot503.cer
+ 
++Source90000: openela-root-ca.cer
++Source90001: openela-fwupd.cer
++Patch90000:  90000-Adding-OpenELA-data-to-generate_sbat-for-branding.patch
++
+ Patch1:    0001-redfish-Set-the-permissions-of-redfish.conf-at-insta.patch
+ Patch2:    0002-redfish-Only-create-users-using-IPMI-when-we-know-it.patch
+ Patch3:    0003-Never-save-the-Redfish-passwords-to-a-file-readable-.patch
+@@ -175,6 +179,7 @@ tar xfvs %{SOURCE1} -C subprojects/libjcat --strip-components=1
+ 
+ mkdir -p subprojects/fwupd-efi
+ tar xfvs %{SOURCE2} -C subprojects/fwupd-efi --strip-components=1
++%patch90000 -p1 -b .generated_sbat
+ 
+ sed -ri '1s=^#!/usr/bin/(env )?python3=#!%{__python3}=' \
+         contrib/ci/*.py \
+@@ -272,9 +277,7 @@ install %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15}
+ %ifarch x86_64
+ %global efiarch x64
+ %global fwup_efi_fn $RPM_BUILD_ROOT%{_libexecdir}/fwupd/efi/fwupd%{efiarch}.efi
+-%pesign -s -i %{fwup_efi_fn} -o %{fwup_efi_fn}.tmp -a %{SOURCE300} -c %{SOURCE301} -n redhatsecureboot301
+-%pesign -s -i %{fwup_efi_fn}.tmp -o %{fwup_efi_fn}.signed -a %{SOURCE500} -c %{SOURCE503} -n redhatsecureboot503
+-rm -fv %{fwup_efi_fn}.tmp
++%pesign -s -i %{fwup_efi_fn} -o %{fwup_efi_fn}.signed -a %{SOURCE90000} -c %{SOURCE90001} -n openelabootsigningcert
+ %endif
+ 
+ mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd/gnupg
+-- 
+2.41.0
+
