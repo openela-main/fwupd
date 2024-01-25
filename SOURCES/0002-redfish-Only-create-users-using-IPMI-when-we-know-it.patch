@@ -1,0 +1,47 @@
+From 4f39b747a6d860e32a3000451dd2635366c81776 Mon Sep 17 00:00:00 2001
+From: Richard Hughes <richard@hughsie.com>
+Date: Tue, 20 Sep 2022 09:13:52 +0100
+Subject: [PATCH 2/3] redfish: Only create users using IPMI when we know it's
+ going to work
+
+Make the IPMI auto-account feature allow-listed on specific vendors as some IPMI
+implementations are not specification compliant and do entirely the wrong thing.
+---
+ plugins/redfish/fu-plugin-redfish.c | 8 ++++++++
+ plugins/redfish/redfish.quirk       | 2 +-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/redfish/fu-plugin-redfish.c b/plugins/redfish/fu-plugin-redfish.c
+index deb0fe742..3972d4b4b 100644
+--- a/plugins/redfish/fu-plugin-redfish.c
++++ b/plugins/redfish/fu-plugin-redfish.c
+@@ -422,6 +422,14 @@ fu_plugin_redfish_startup(FuPlugin *plugin, GError **error)
+ #ifdef HAVE_LINUX_IPMI_H
+ 	/* we got neither a type 42 entry or config value, lets try IPMI */
+ 	if (fu_redfish_backend_get_username(data->backend) == NULL) {
++		if (!fu_context_has_hwid_flag(fu_plugin_get_context(plugin), "ipmi-create-user")) {
++			g_set_error_literal(error,
++					    FWUPD_ERROR,
++					    FWUPD_ERROR_NOT_SUPPORTED,
++					    "no username and password specified, "
++					    "and no vendor quirk for 'ipmi-create-user'");
++			return FALSE;
++		}
+ 		if (!fu_plugin_get_config_value_boolean(plugin, "IpmiDisableCreateUser")) {
+ 			g_debug("attempting to create user using IPMI");
+ 			if (!fu_redfish_plugin_ipmi_create_user(plugin, error))
+diff --git a/plugins/redfish/redfish.quirk b/plugins/redfish/redfish.quirk
+index b12439926..5e9722fda 100644
+--- a/plugins/redfish/redfish.quirk
++++ b/plugins/redfish/redfish.quirk
+@@ -1,6 +1,6 @@
+ # Lenovo ThinkSystem
+ [42f00735-c9ab-5374-bd63-a5deee5881e0]
+-Flags = wildcard-targets,reset-required
++Flags = wildcard-targets,reset-required,ipmi-create-user
+ 
+ [REDFISH\VENDOR_Lenovo&ID_BMC-Backup]
+ ParentGuid = REDFISH\VENDOR_Lenovo&ID_BMC-Primary
+-- 
+2.39.1
+

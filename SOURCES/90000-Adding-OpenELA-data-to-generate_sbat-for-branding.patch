@@ -1,0 +1,36 @@
+From 2a52a9c51c4aa2535fa16aa096efa37bac0ac489 Mon Sep 17 00:00:00 2001
+From: Sherif Nagy <sherif@rockylinux.org>
+Date: Wed, 9 Nov 2022 21:47:40 +0000
+Subject: [PATCH] Adding OpenELA data to generate_sbat for branding
+
+---
+ efi/generate_sbat.py | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/subprojects/fwupd-efi/efi/generate_sbat.py b/subprojects/fwupd-efi/efi/generate_sbat.py
+index 7788d72..978a664 100755
+--- a/subprojects/fwupd-efi/efi/generate_sbat.py
++++ b/subprojects/fwupd-efi/efi/generate_sbat.py
+@@ -62,6 +62,19 @@ def _generate_sbat(args):
+             ).encode()
+         )
+ 
++        # OpenELA specifics, falling back to the project defaults
++        sfd.write(
++            "{0}.{1},{2},{3},{4},{5},{6}\n".format(
++                args.project_name,
++                "openela",
++                args.sbat_distro_generation or args.sbat_generation,
++                "OpenELA",
++                args.sbat_distro_pkgname,
++                args.sbat_distro_version or args.project_version,
++                "mail:security@openela.org",
++            ).encode()
++        )
++
+         # all written
+         sfd.seek(0)
+ 
+-- 
+2.38.1
+
