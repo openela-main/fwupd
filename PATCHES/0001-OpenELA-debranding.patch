@@ -1,0 +1,52 @@
+From bc06066ee78202a6ef7c3bd3ba45065bc02e47a5 Mon Sep 17 00:00:00 2001
+From: Louis Abel <label@rockylinux.org>
+Date: Tue, 25 Apr 2023 14:36:01 -0700
+Subject: [PATCH] Rebase patch for 1.8.10 + New SB Certs
+
+---
+ SPECS/fwupd.spec | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/SPECS/fwupd.spec b/SPECS/fwupd.spec
+index 07415c2..937b25f 100644
+--- a/SPECS/fwupd.spec
++++ b/SPECS/fwupd.spec
+@@ -86,6 +86,9 @@ Source301:   redhatsecureboot301.cer
+ Source500:   redhatsecurebootca5.cer
+ Source503:   redhatsecureboot503.cer
+ 
++Source90000: openela-root-ca.cer
++Source90001: openela-fwupd.cer
++
+ BuildRequires: gettext
+ BuildRequires: glib2-devel >= %{glib2_version}
+ BuildRequires: libxmlb-devel >= %{libxmlb_version}
+@@ -256,11 +259,11 @@ cd -
+     -Dplugin_tpm=enabled \
+     -Defi_os_dir=%{efi_vendor} \
+ %ifarch x86_64
+-    -Dfwupd-efi:efi_sbat_distro_id="rhel" \
+-    -Dfwupd-efi:efi_sbat_distro_summary="Red Hat Enterprise Linux" \
++    -Dfwupd-efi:efi_sbat_distro_id="openela" \
++    -Dfwupd-efi:efi_sbat_distro_summary="OpenELA" \
+     -Dfwupd-efi:efi_sbat_distro_pkgname="%{name}" \
+     -Dfwupd-efi:efi_sbat_distro_version="%{version}" \
+-    -Dfwupd-efi:efi_sbat_distro_url="mail:secalert@redhat.com" \
++    -Dfwupd-efi:efi_sbat_distro_url="mail:security@openela.org" \
+     -Dfwupd-efi:efi-libdir="/usr/lib64" \
+ %endif
+ %else
+@@ -310,9 +313,7 @@ install %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15}
+ %ifarch x86_64
+ %global efiarch x64
+ %global fwup_efi_fn $RPM_BUILD_ROOT%{_libexecdir}/fwupd/efi/fwupd%{efiarch}.efi
+-%pesign -s -i %{fwup_efi_fn} -o %{fwup_efi_fn}.tmp -a %{SOURCE300} -c %{SOURCE301} -n redhatsecureboot301
+-%pesign -s -i %{fwup_efi_fn}.tmp -o %{fwup_efi_fn}.signed -a %{SOURCE500} -c %{SOURCE503} -n redhatsecureboot503
+-rm -fv %{fwup_efi_fn}.tmp
++%pesign -s -i %{fwup_efi_fn} -o %{fwup_efi_fn}.signed -a %{SOURCE90000} -c %{SOURCE90001} -n openelasigningcert
+ %endif
+ 
+ mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd/gnupg
+-- 
+2.39.2
+
