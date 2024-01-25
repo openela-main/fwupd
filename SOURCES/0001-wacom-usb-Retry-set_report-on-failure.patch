@@ -1,0 +1,46 @@
+From 8076090a000d4adde59fddeadb17a6f769993d1e Mon Sep 17 00:00:00 2001
+From: Jason Gerecke <killertofu@gmail.com>
+Date: Tue, 17 Jan 2023 14:24:14 -0800
+Subject: [PATCH] wacom-usb: Retry set_report on failure
+
+Sometimes the flash process will randomly hang and time-out when sending
+data to the device. We currently do not use any retry logic, so if this
+happens the flash attempt is treated as a failure. This can be a source
+of worry or frustration, especially if subsequent manual retries fail
+in a similar way.
+
+Adding FU_HID_DEVICE_FLAG_RETRY_FAILURE to the list of flags used when
+calling fu_hid_device_set_report allows fwupd to try sending a block
+multiple times if such a time-out (or other error) occurs. This makes
+the flash process less prone to failure.
+
+Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+---
+ plugins/wacom-usb/fu-wac-device.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/wacom-usb/fu-wac-device.c b/plugins/wacom-usb/fu-wac-device.c
+index 9162d19a9..714761b1e 100644
+--- a/plugins/wacom-usb/fu-wac-device.c
++++ b/plugins/wacom-usb/fu-wac-device.c
+@@ -182,7 +182,8 @@ fu_wac_device_set_feature_report(FuWacDevice *self,
+ 					buf,
+ 					bufsz,
+ 					FU_WAC_DEVICE_TIMEOUT,
+-					flags | FU_HID_DEVICE_FLAG_IS_FEATURE,
++					flags | FU_HID_DEVICE_FLAG_IS_FEATURE |
++					    FU_HID_DEVICE_FLAG_RETRY_FAILURE,
+ 					error);
+ }
+ 
+@@ -920,6 +921,7 @@ fu_wac_device_init(FuWacDevice *self)
+ 	fu_device_set_install_duration(FU_DEVICE(self), 10);
+ 	fu_device_set_remove_delay(FU_DEVICE(self), FU_DEVICE_REMOVE_DELAY_RE_ENUMERATE);
+ 	fu_device_set_firmware_gtype(FU_DEVICE(self), FU_TYPE_WAC_FIRMWARE);
++	fu_device_retry_set_delay(FU_DEVICE(self), 30); /* ms */
+ }
+ 
+ static void
+-- 
+2.39.1
+

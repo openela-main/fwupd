@@ -1,0 +1,24 @@
+From 7f427d567d497048772bad59e098528605e563ce Mon Sep 17 00:00:00 2001
+From: Richard Hughes <richard@hughsie.com>
+Date: Mon, 23 Jan 2023 11:22:43 +0000
+Subject: [PATCH] trivial: Fix build fix when using ppc64le system
+
+---
+ src/meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/meson.build b/src/meson.build
+index b9f6736f2..f3ca734ee 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -197,6 +197,7 @@ plugins_hdr = custom_target('fwupd-generate-plugins-header',
+ fwupdengine = library(
+   'fwupdengine',
+   resources_src,
++  plugins_hdr,
+   sources: fwupd_engine_src,
+   install: true,
+   install_rpath: libdir_pkg,
+-- 
+2.39.1
+

@@ -1,0 +1,28 @@
+From af5fb429c8e726d1d7455b2d0e5d4263edbd4290 Mon Sep 17 00:00:00 2001
+From: Ivan Mikhanchuk <ivanmikh@pm.me>
+Date: Tue, 24 Jan 2023 17:06:09 -0800
+Subject: [PATCH] modem-manager: remove improper use of assert
+
+FuSaharaLoader being NULL is normal for devices that only
+support Firehose and don't use Sahara QDL port.
+---
+ plugins/modem-manager/fu-sahara-loader.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/modem-manager/fu-sahara-loader.c b/plugins/modem-manager/fu-sahara-loader.c
+index 89c620fbe..78f24036f 100644
+--- a/plugins/modem-manager/fu-sahara-loader.c
++++ b/plugins/modem-manager/fu-sahara-loader.c
+@@ -206,7 +206,8 @@ fu_sahara_loader_close(FuSaharaLoader *self, GError **error)
+ gboolean
+ fu_sahara_loader_qdl_is_open(FuSaharaLoader *self)
+ {
+-	g_return_val_if_fail(self != NULL, FALSE);
++	if (self == NULL)
++		return FALSE;
+ 
+ 	return fu_usb_device_is_open(self->usb_device);
+ }
+-- 
+2.39.1
+

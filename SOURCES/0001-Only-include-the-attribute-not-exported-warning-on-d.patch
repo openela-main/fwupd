@@ -1,0 +1,60 @@
+From 19db23f9b8a64597564ce1b474eb6c384a57125f Mon Sep 17 00:00:00 2001
+From: Richard Hughes <richard@hughsie.com>
+Date: Wed, 2 Nov 2022 09:31:53 +0000
+Subject: [PATCH] Only include the 'attribute not exported' warning on debug
+ builds
+
+End users are not really capable of fixing the root issue, and people seem
+overly worried that something bad has gone wrong.
+
+Fixes https://github.com/fwupd/fwupd/issues/5077
+---
+ libfwupdplugin/fu-bios-settings.c      | 2 +-
+ libfwupdplugin/fu-self-test.c          | 2 ++
+ plugins/lenovo-thinklmi/fu-self-test.c | 2 ++
+ 3 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/libfwupdplugin/fu-bios-settings.c b/libfwupdplugin/fu-bios-settings.c
+index 6151c8289..8ea1269d7 100644
+--- a/libfwupdplugin/fu-bios-settings.c
++++ b/libfwupdplugin/fu-bios-settings.c
+@@ -276,7 +276,7 @@ fu_bios_setting_set_type(FuBiosSettings *self, FwupdBiosSetting *attr, GError **
+ 
+ 	/* lenovo thinklmi seems to be missing it even though it's mandatory :/ */
+ 	if (!fu_bios_setting_get_key(attr, "type", &data, &error_key)) {
+-#if GLIB_CHECK_VERSION(2, 64, 0)
++#if GLIB_CHECK_VERSION(2, 64, 0) && !defined(SUPPORTED_BUILD)
+ 		g_warning_once("KERNEL BUG: 'type' attribute not exported: (%s)",
+ 			       error_key->message);
+ #else
+diff --git a/libfwupdplugin/fu-self-test.c b/libfwupdplugin/fu-self-test.c
+index c105fa271..c670b3a80 100644
+--- a/libfwupdplugin/fu-self-test.c
++++ b/libfwupdplugin/fu-self-test.c
+@@ -3117,7 +3117,9 @@ fu_bios_settings_load_func(void)
+ 	test_dir = g_test_build_filename(G_TEST_DIST, "tests", "bios-attrs", "lenovo-p620", NULL);
+ 	(void)g_setenv("FWUPD_SYSFSFWATTRIBDIR", test_dir, TRUE);
+ 
++#if GLIB_CHECK_VERSION(2, 64, 0) && !defined(SUPPORTED_BUILD)
+ 	g_test_expect_message("FuBiosSettings", G_LOG_LEVEL_WARNING, "*BUG*");
++#endif
+ 	ret = fu_context_reload_bios_settings(ctx, &error);
+ 	g_assert_no_error(error);
+ 	g_assert_true(ret);
+diff --git a/plugins/lenovo-thinklmi/fu-self-test.c b/plugins/lenovo-thinklmi/fu-self-test.c
+index 4777a2ae1..9e20a8cf5 100644
+--- a/plugins/lenovo-thinklmi/fu-self-test.c
++++ b/plugins/lenovo-thinklmi/fu-self-test.c
+@@ -39,7 +39,9 @@ fu_test_self_init(FuTest *self, GError **error_global)
+ 	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+ 	g_autoptr(GError) error = NULL;
+ 
++#if GLIB_CHECK_VERSION(2, 64, 0) && !defined(SUPPORTED_BUILD)
+ 	g_test_expect_message("FuBiosSettings", G_LOG_LEVEL_WARNING, "*KERNEL*BUG*");
++#endif
+ 
+ 	ret = fu_context_load_quirks(ctx,
+ 				     FU_QUIRKS_LOAD_FLAG_NO_CACHE | FU_QUIRKS_LOAD_FLAG_NO_VERIFY,
+-- 
+2.39.1
+
