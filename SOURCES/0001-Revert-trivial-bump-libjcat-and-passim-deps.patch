@@ -1,0 +1,38 @@
+From 11a6f914ae27953c9070f6e4cd562a326e1cb60c Mon Sep 17 00:00:00 2001
+From: Richard Hughes <richard@hughsie.com>
+Date: Tue, 15 Oct 2024 14:27:08 +0100
+Subject: [PATCH] Revert "trivial: bump libjcat and passim deps"
+
+This reverts commit 774b87fed0c6addd49cdc65a3ecc24923f7c76ae.
+
+We can update the subproject, but we can't raise the deps in a stable branch
+otherwise we make it really hard to build for RHEL and Ubuntu LTS.
+---
+ meson.build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 167e529d1..5047cab72 100644
+--- a/meson.build
++++ b/meson.build
+@@ -241,7 +241,7 @@ sqlite = dependency('sqlite3', required: get_option('sqlite'))
+ if sqlite.found()
+   conf.set('HAVE_SQLITE', '1')
+ endif
+-passim = dependency('passim', version: '>= 0.1.5', required: get_option('passim'), fallback: ['passim', 'passim_dep'])
++passim = dependency('passim', version: '>= 0.1.2', required: get_option('passim'), fallback: ['passim', 'passim_dep'])
+ if passim.found()
+   conf.set('HAVE_PASSIM', '1')
+ endif
+@@ -253,7 +253,7 @@ if libarchive.found()
+   endif
+ endif
+ endif
+-libjcat = dependency('jcat', version: '>= 0.2.0', fallback: ['libjcat', 'libjcat_dep'])
++libjcat = dependency('jcat', version: '>= 0.1.4', fallback: ['libjcat', 'libjcat_dep'])
+ libjsonglib = dependency('json-glib-1.0', version: '>= 1.6.0')
+ valgrind = dependency('valgrind', required: false)
+ libcurl = dependency('libcurl', version: '>= 7.62.0', required: get_option('curl'))
+-- 
+2.47.0
+

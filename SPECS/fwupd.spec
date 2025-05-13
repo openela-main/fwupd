@@ -36,11 +36,6 @@
 %global have_msr 1
 %endif
 
-# libsmbios is only available on x86
-%ifarch x86_64
-%global have_dell 1
-%endif
-
 # Until we actually have seen it outside x86
 %ifarch i686 x86_64
 %global have_thunderbolt 1
@@ -53,20 +48,15 @@
 
 Summary:              Firmware update daemon
 Name:                 fwupd
-Version:              1.8.10
-Release:              2%{?dist}
+Version:              1.9.26
+Release:              1%{?dist}
 License:              LGPLv2+
 URL:                  https://github.com/fwupd/fwupd
 Source0:              http://people.freedesktop.org/~hughsient/releases/%{name}-%{version}.tar.xz
 Source2:              http://people.freedesktop.org/~hughsient/releases/fwupd-efi-1.4.tar.xz
 
-Patch1:               0001-trivial-Fix-build-fix-when-using-ppc64le-system.patch
-Patch2:               0001-Only-include-the-attribute-not-exported-warning-on-d.patch
-Patch3:               0001-Do-not-make-any-of-the-HWIDs-setup-failures-fatal.patch
-Patch4:               0001-modem-manager-remove-improper-use-of-assert.patch
-Patch5:               0001-wacom-usb-Retry-set_report-on-failure.patch
-
 Patch101:             0001-generate_binary-Add-NX-COMPAT-flag-manually-when-gen.patch
+Patch201:             0001-Revert-trivial-bump-libjcat-and-passim-deps.patch
 
 Source10:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20100307-x64.cab
 Source11:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20140413-x64.cab
@@ -78,6 +68,9 @@ Source16:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20210429-x6
 Source17:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-aa64.cab
 Source18:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-ia32.cab
 Source19:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-x64.cab
+Source20:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-aa64.cab
+Source21:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-ia32.cab
+Source22:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-x64.cab
 
 # these are numbered high just to keep them wildly away from colliding with
 # the real package sources, in order to reduce churn.
@@ -88,7 +81,6 @@ Source90001:          openela-fwupd.cer
 BuildRequires:        gettext
 BuildRequires:        glib2-devel >= %{glib2_version}
 BuildRequires:        libxmlb-devel >= %{libxmlb_version}
-BuildRequires:        libgcab1-devel
 BuildRequires:        libgudev1-devel
 BuildRequires:        libgusb-devel >= %{libgusb_version}
 BuildRequires:        libcurl-devel >= %{libcurl_version}
@@ -99,7 +91,6 @@ BuildRequires:        systemd >= %{systemd_version}
 BuildRequires:        systemd-devel
 BuildRequires:        libarchive-devel
 BuildRequires:        gobject-introspection-devel
-BuildRequires:        gcab
 %ifarch %{valgrind_arches}
 BuildRequires:        valgrind
 BuildRequires:        valgrind-devel
@@ -114,6 +105,8 @@ BuildRequires:        git-core
 %if 0%{?have_flashrom}
 BuildRequires:        flashrom-devel >= 1.2-2
 %endif
+BuildRequires:        libdrm-devel
+BuildRequires:        python3-jinja2
 
 %if 0%{?have_modem_manager}
 BuildRequires:        ModemManager-glib-devel >= 1.10.0
@@ -132,11 +125,6 @@ BuildRequires:        google-noto-sans-cjk-ttc-fonts
 BuildRequires:        gnu-efi-devel
 BuildRequires:        tpm2-tss-devel >= 2.2.3
 BuildRequires:        pesign >= 113-20
-%endif
-
-%if 0%{?have_dell}
-BuildRequires:        efivar-devel >= 33
-BuildRequires:        libsmbios-devel >= 2.3.0
 %endif
 
 Requires(post): systemd
@@ -207,11 +195,7 @@ can be flashed using flashrom. It is probably not required on servers.
 
 %prep
 %setup -q
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
+%patch201 -p1
 
 mkdir -p subprojects/fwupd-efi
 tar xfvs %{SOURCE2} -C subprojects/fwupd-efi --strip-components=1
@@ -224,15 +208,12 @@ cd -
 %meson \
     -Ddocs=disabled \
     -Dlvfs=disabled \
+    -Dlaunchd=disabled \
+    -Dpassim=disabled \
 %if 0%{?enable_tests}
     -Dtests=true \
 %else
     -Dtests=false \
-%endif
-%if 0%{?enable_dummy}
-    -Dplugin_dummy=true \
-%else
-    -Dplugin_dummy=false \
 %endif
 %if 0%{?have_flashrom}
     -Dplugin_flashrom=enabled \
@@ -267,17 +248,14 @@ cd -
     -Dplugin_uefi_pk=disabled \
     -Dplugin_tpm=disabled \
 %endif
-%if 0%{?have_dell}
-    -Dplugin_dell=enabled \
-%else
-    -Dplugin_dell=disabled \
-%endif
 %if 0%{?have_modem_manager}
     -Dplugin_modem_manager=enabled \
 %else
     -Dplugin_modem_manager=disabled \
 %endif
     -Dman=true \
+    -Dsystemd_unit_user="" \
+    -Dcompat_cli=true \
     -Dbluez=disabled \
     -Dcbor=disabled \
     -Dplugin_android_boot=disabled \
@@ -303,7 +281,10 @@ cd -
 
 # on RHEL the LVFS is disabled by default
 mkdir -p %{buildroot}/%{_datadir}/dbxtool
-install %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15} %{SOURCE16} %{SOURCE17} %{SOURCE18} %{SOURCE19} %{buildroot}/%{_datadir}/dbxtool
+install \
+  %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15} \
+  %{SOURCE16} %{SOURCE17} %{SOURCE18} %{SOURCE19} %{SOURCE20} %{SOURCE21} %{SOURCE22} \
+  %{buildroot}/%{_datadir}/dbxtool
 
 # sign fwupd.efi loader
 %ifarch x86_64
@@ -320,7 +301,7 @@ mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/cache/fwupd
 %find_lang %{name}
 
 %post
-%systemd_post fwupd.service
+%systemd_post fwupd.service fwupd-refresh.timer
 
 # change vendor-installed remotes to use the default keyring type
 for fn in /etc/fwupd/remotes.d/*.conf; do
@@ -330,26 +311,18 @@ for fn in /etc/fwupd/remotes.d/*.conf; do
 done
 
 %preun
-%systemd_preun fwupd.service
+%systemd_preun fwupd.service fwupd-refresh.timer
 
 %postun
-%systemd_postun_with_restart fwupd.service
-%systemd_postun_with_restart pesign.service
+%systemd_postun_with_restart fwupd.service fwupd-refresh.timer
 
 %files -f %{name}.lang
-%doc README.md AUTHORS
+%doc README.md
 %license COPYING
-%config(noreplace)%{_sysconfdir}/fwupd/daemon.conf
-%if 0%{?have_uefi}
-%config(noreplace)%{_sysconfdir}/fwupd/uefi_capsule.conf
-%endif
-%config(noreplace)%{_sysconfdir}/fwupd/redfish.conf
-%if 0%{?have_thunderbolt}
-%config(noreplace)%{_sysconfdir}/fwupd/thunderbolt.conf
-%endif
+%config(noreplace)%{_sysconfdir}/fwupd/fwupd.conf
 %dir %{_libexecdir}/fwupd
 %{_libexecdir}/fwupd/fwupd
-%ifarch i686 x86_64
+%ifarch x86_64
 %{_libexecdir}/fwupd/fwupd-detect-cet
 %endif
 %{_libexecdir}/fwupd/fwupdoffline
@@ -361,9 +334,7 @@ done
 %{_bindir}/fwupdate
 %endif
 %{_bindir}/dfu-tool
-%if 0%{?have_uefi}
 %{_bindir}/dbxtool
-%endif
 %{_bindir}/fwupdmgr
 %{_bindir}/fwupdtool
 %{_bindir}/fwupdagent
@@ -371,28 +342,24 @@ done
 %dir %{_sysconfdir}/fwupd/bios-settings.d
 %{_sysconfdir}/fwupd/bios-settings.d/README.md
 %dir %{_sysconfdir}/fwupd/remotes.d
-%if 0%{?have_dell}
-%config(noreplace)%{_sysconfdir}/fwupd/remotes.d/dell-esrt.conf
-%endif
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/lvfs.conf
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/lvfs-testing.conf
-%config(noreplace)%{_sysconfdir}/fwupd/remotes.d/vendor.conf
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/vendor-directory.conf
 %config(noreplace)%{_sysconfdir}/pki/fwupd
 %{_sysconfdir}/pki/fwupd-metadata
 %if 0%{?have_msr}
 /usr/lib/modules-load.d/fwupd-msr.conf
-%config(noreplace)%{_sysconfdir}/fwupd/msr.conf
 %endif
 %{_datadir}/dbus-1/system.d/org.freedesktop.fwupd.conf
 %{_datadir}/bash-completion/completions/fwupdmgr
 %{_datadir}/bash-completion/completions/fwupdtool
-%{_datadir}/bash-completion/completions/fwupdagent
 %{_datadir}/fish/vendor_completions.d/fwupdmgr.fish
+%dir %{_datadir}/fwupd
+%dir %{_datadir}/fwupd/metainfo
 %{_datadir}/fwupd/metainfo/org.freedesktop.fwupd*.metainfo.xml
-%if 0%{?have_dell}
-%{_datadir}/fwupd/remotes.d/dell-esrt/metadata.xml
-%endif
+%dir %{_datadir}/fwupd/remotes.d
+%dir %{_datadir}/fwupd/remotes.d/vendor
+%dir %{_datadir}/fwupd/remotes.d/vendor/firmware
 %{_datadir}/fwupd/remotes.d/vendor/firmware/README.md
 %{_datadir}/dbus-1/interfaces/org.freedesktop.fwupd.xml
 %{_datadir}/polkit-1/actions/org.freedesktop.fwupd.policy
@@ -409,16 +376,12 @@ done
 %{_datadir}/dbxtool/DBXUpdate-20220812-aa64.cab
 %{_datadir}/dbxtool/DBXUpdate-20220812-ia32.cab
 %{_datadir}/dbxtool/DBXUpdate-20220812-x64.cab
-%{_mandir}/man1/fwupdtool.1*
-%{_mandir}/man1/fwupdagent.1*
-%{_mandir}/man1/dfu-tool.1*
-%if 0%{?have_uefi}
-%{_mandir}/man1/dbxtool.*
-%endif
-%{_mandir}/man1/fwupdmgr.1*
-%if 0%{?have_uefi}
-%{_mandir}/man1/fwupdate.1*
-%endif
+%{_datadir}/dbxtool/DBXUpdate-20230509-aa64.cab
+%{_datadir}/dbxtool/DBXUpdate-20230509-ia32.cab
+%{_datadir}/dbxtool/DBXUpdate-20230509-x64.cab
+%{_mandir}/man1/*
+%{_mandir}/man5/*
+%{_mandir}/man8/*
 %{_datadir}/metainfo/org.freedesktop.fwupd.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/org.freedesktop.fwupd.svg
 %{_datadir}/fwupd/firmware_packager.py
@@ -429,14 +392,13 @@ done
 %{_unitdir}/fwupd.service
 %{_unitdir}/fwupd-refresh.service
 %{_unitdir}/fwupd-refresh.timer
-%{_presetdir}/fwupd-refresh.preset
 %{_unitdir}/system-update.target.wants/
 %dir %{_localstatedir}/lib/fwupd
 %dir %{_localstatedir}/cache/fwupd
 %dir %{_datadir}/fwupd/quirks.d
 %{_datadir}/fwupd/quirks.d/builtin.quirk.gz
 %if 0%{?have_uefi}
-%{_sysconfdir}/grub.d/35_fwupd
+%config(noreplace)%{_sysconfdir}/grub.d/35_fwupd
 %endif
 %{_libdir}/libfwupd.so.2*
 %{_libdir}/girepository-1.0/Fwupd-2.0.typelib
@@ -476,6 +438,9 @@ done
 %{_datadir}/installed-tests/fwupd/fwupd-tests.xml
 %{_datadir}/installed-tests/fwupd/*.test
 %{_datadir}/installed-tests/fwupd/*.cab
+%{_datadir}/installed-tests/fwupd/fakedevice124.jcat
+%{_datadir}/installed-tests/fwupd/fakedevice124.bin
+%{_datadir}/installed-tests/fwupd/fakedevice124.metainfo.xml
 %{_datadir}/installed-tests/fwupd/*.sh
 %{_datadir}/installed-tests/fwupd/*.zip
 %if 0%{?have_uefi}
@@ -483,16 +448,45 @@ done
 %endif
 %{_datadir}/installed-tests/fwupd/chassis_type
 %{_datadir}/installed-tests/fwupd/sys_vendor
-%{_datadir}/fwupd/device-tests/*.json
 %{_libexecdir}/installed-tests/fwupd/*
 %dir %{_sysconfdir}/fwupd/remotes.d
-%config(noreplace)%{_sysconfdir}/fwupd/remotes.d/fwupd-tests.conf
+%{_datadir}/fwupd/remotes.d/fwupd-tests.conf
 %endif
 
 %changelog
-* Thu Jan 25 2024 Release Engineering <releng@openela.org> - 1.8.10
+* Tue May 13 2025 Release Engineering <releng@openela.org> - 1.9.26
 - OpenELA 9 debranding (Sherif Nagy)
 - Updating prod cert (Sherif Nagy)
+
+* Tue Oct 15 2024 Richard Hughes <richard@hughsie.com> 1.9.26-1
+- Rebase to get hardware support for CERTPX-13842
+- Resolves: #RHEL-16637
+- Resolves: #RHEL-35373
+- Resolves: #RHEL-61930
+
+* Mon Feb 19 2024 Richard Hughes <richard@hughsie.com> 1.9.13-2
+- Fix upgrade from fwupd < v1.9.5
+- Resolves: #RHEL-15328
+
+* Thu Feb 15 2024 Richard Hughes <richard@hughsie.com> 1.9.13-1
+- Update to latest stable upstream version.
+- Resolves: #RHEL-15328
+
+* Wed Jan 24 2024 Richard Hughes <richard@hughsie.com> 1.9.12-1
+- Update to latest stable upstream version.
+- Resolves: #RHEL-15328
+
+* Wed Jan 03 2024 Richard Hughes <richard@hughsie.com> 1.9.11-1
+- Update to latest stable upstream version.
+- Resolves: #RHEL-15328
+
+* Mon Dec 04 2023 Richard Hughes <richard@hughsie.com> 1.9.10-1
+- Update to latest stable upstream version.
+- Resolves: #RHEL-15328
+
+* Fri Jun 09 2023 Richard Hughes <richard@hughsie.com> 1.8.16-1
+- Update to latest stable upstream version.
+- Resolves: rhbz#2209944
 
 * Thu Feb 02 2023 Richard Hughes <richard@hughsie.com> 1.8.10-2
 - Rebuild because distrobaker did entirely the wrong thing.
