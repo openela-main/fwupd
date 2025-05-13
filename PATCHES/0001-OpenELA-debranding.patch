@@ -1,17 +1,18 @@
-From bc06066ee78202a6ef7c3bd3ba45065bc02e47a5 Mon Sep 17 00:00:00 2001
-From: Louis Abel <label@rockylinux.org>
-Date: Tue, 25 Apr 2023 14:36:01 -0700
-Subject: [PATCH] Rebase patch for 1.8.10 + New SB Certs
+From bbefad8abdce3af218cf5e6816961f1c60f0b0b0 Mon Sep 17 00:00:00 2001
+From: Alex Burmashev <alexander.burmashev@oracle.com>
+Date: Tue, 13 May 2025 10:37:41 +0000
+Subject: [PATCH] Update debranding for OpenELA 9.6
 
+Signed-off-by: Alex Burmashev <alexander.burmashev@oracle.com>
 ---
  SPECS/fwupd.spec | 13 +++++++------
  1 file changed, 7 insertions(+), 6 deletions(-)
 
 diff --git a/SPECS/fwupd.spec b/SPECS/fwupd.spec
-index 07415c2..937b25f 100644
+index 1c33b9c..75c5884 100644
 --- a/SPECS/fwupd.spec
 +++ b/SPECS/fwupd.spec
-@@ -86,6 +86,9 @@ Source301:   redhatsecureboot301.cer
+@@ -79,6 +79,9 @@ Source301:   redhatsecureboot301.cer
  Source500:   redhatsecurebootca5.cer
  Source503:   redhatsecureboot503.cer
  
@@ -21,7 +22,7 @@ index 07415c2..937b25f 100644
  BuildRequires: gettext
  BuildRequires: glib2-devel >= %{glib2_version}
  BuildRequires: libxmlb-devel >= %{libxmlb_version}
-@@ -256,11 +259,11 @@ cd -
+@@ -237,11 +240,11 @@ cd -
      -Dplugin_tpm=enabled \
      -Defi_os_dir=%{efi_vendor} \
  %ifarch x86_64
@@ -36,7 +37,7 @@ index 07415c2..937b25f 100644
      -Dfwupd-efi:efi-libdir="/usr/lib64" \
  %endif
  %else
-@@ -310,9 +313,7 @@ install %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15}
+@@ -291,9 +294,7 @@ install \
  %ifarch x86_64
  %global efiarch x64
  %global fwup_efi_fn $RPM_BUILD_ROOT%{_libexecdir}/fwupd/efi/fwupd%{efiarch}.efi
@@ -48,5 +49,5 @@ index 07415c2..937b25f 100644
  
  mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd/gnupg
 -- 
-2.39.2
+2.47.1
 
