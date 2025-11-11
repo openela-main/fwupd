@@ -48,7 +48,7 @@
 
 Summary:              Firmware update daemon
 Name:                 fwupd
-Version:              1.9.26
+Version:              1.9.31
 Release:              1%{?dist}
 License:              LGPLv2+
 URL:                  https://github.com/fwupd/fwupd
@@ -56,7 +56,6 @@ Source0:              http://people.freedesktop.org/~hughsient/releases/%{name}-
 Source2:              http://people.freedesktop.org/~hughsient/releases/fwupd-efi-1.4.tar.xz
 
 Patch101:             0001-generate_binary-Add-NX-COMPAT-flag-manually-when-gen.patch
-Patch201:             0001-Revert-trivial-bump-libjcat-and-passim-deps.patch
 
 Source10:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20100307-x64.cab
 Source11:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20140413-x64.cab
@@ -71,6 +70,8 @@ Source19:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-x6
 Source20:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-aa64.cab
 Source21:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-ia32.cab
 Source22:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-x64.cab
+Source23:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20241101-x64.cab
+Source24:             http://people.redhat.com/rhughes/dbx/DBXUpdate-20250507-legacy-x64.cab
 
 # these are numbered high just to keep them wildly away from colliding with
 # the real package sources, in order to reduce churn.
@@ -195,7 +196,6 @@ can be flashed using flashrom. It is probably not required on servers.
 
 %prep
 %setup -q
-%patch201 -p1
 
 mkdir -p subprojects/fwupd-efi
 tar xfvs %{SOURCE2} -C subprojects/fwupd-efi --strip-components=1
@@ -283,7 +283,8 @@ cd -
 mkdir -p %{buildroot}/%{_datadir}/dbxtool
 install \
   %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15} \
-  %{SOURCE16} %{SOURCE17} %{SOURCE18} %{SOURCE19} %{SOURCE20} %{SOURCE21} %{SOURCE22} \
+  %{SOURCE16} %{SOURCE17} %{SOURCE18} %{SOURCE19} %{SOURCE20} %{SOURCE21} \
+  %{SOURCE22} %{SOURCE23} %{SOURCE24} \
   %{buildroot}/%{_datadir}/dbxtool
 
 # sign fwupd.efi loader
@@ -379,6 +380,8 @@ done
 %{_datadir}/dbxtool/DBXUpdate-20230509-aa64.cab
 %{_datadir}/dbxtool/DBXUpdate-20230509-ia32.cab
 %{_datadir}/dbxtool/DBXUpdate-20230509-x64.cab
+%{_datadir}/dbxtool/DBXUpdate-20241101-x64.cab
+%{_datadir}/dbxtool/DBXUpdate-20250507-legacy-x64.cab
 %{_mandir}/man1/*
 %{_mandir}/man5/*
 %{_mandir}/man8/*
@@ -454,9 +457,17 @@ done
 %endif
 
 %changelog
-* Tue May 13 2025 Release Engineering <releng@openela.org> - 1.9.26
+* Tue Nov 11 2025 Release Engineering <releng@openela.org> - 1.9.31
 - OpenELA 9 debranding (Sherif Nagy)
 - Updating prod cert (Sherif Nagy)
+
+* Fri Jul 11 2025 Richard Hughes <richard@hughsie.com> 1.9.31-1
+- Rebase to get new hardware support
+- Resolves: #RHEL-82423
+
+* Tue Mar 18 2025 Richard Hughes <richard@hughsie.com> 1.9.29-1
+- Rebase to get new hardware support
+- Resolves: #RHEL-82423
 
 * Tue Oct 15 2024 Richard Hughes <richard@hughsie.com> 1.9.26-1
 - Rebase to get hardware support for CERTPX-13842
