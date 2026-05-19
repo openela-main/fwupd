@@ -2,19 +2,25 @@
 ## (rpmautospec version 0.6.5)
 ## RPMAUTOSPEC: autorelease, autochangelog
 %define autorelease(e:s:pb:n) %{?-p:0.}%{lua:
-    release_number = 1;
+    release_number = 4;
     base_release_number = tonumber(rpm.expand("%{?-b*}%{!?-b:1}"));
     print(release_number + base_release_number - 1);
 }%{?-e:.%{-e*}}%{?-s:.%{-s*}}%{!?-n:%{?dist}}
 ## END: Set by rpmautospec
 
-%global glib2_version 2.45.8
+%global glib2_version 2.68.0
 %global libxmlb_version 0.1.3
-%global libgusb_version 0.3.5
+%global libusb_version 1.0.9
 %global libcurl_version 7.62.0
 %global libjcat_version 0.1.0
-%global systemd_version 231
+%global systemd_version 249
 %global json_glib_version 1.1.1
+
+# to use this feature use `rpmbuild -ba fwupd.spec --with=libfwupdcompat`
+%bcond_with libfwupdcompat
+%if %{with libfwupdcompat} || 0%{?rhel}
+%global libfwupd_19x_version 31
+%endif
 
 # although we ship a few tiny python files these are utilities that 99.99%
 # of users do not need -- use this to avoid dragging python onto CoreOS
@@ -24,17 +30,15 @@
 %ifnarch ppc64le
 %global enable_tests 1
 %endif
+%global __meson_wrap_mode nodownload
 
-%global enable_dummy 1
+%if 0%{?fedora} >= 30 || 0%{?rhel} >= 10
+%global have_gi_docgen 1
+%endif
 
 # fwupd.efi is only available on these arches
 %ifarch x86_64 aarch64 riscv64
 %global have_uefi 1
-%endif
-
-# gpio.h is only available on these arches
-%ifarch x86_64 aarch64
-%global have_gpio 1
 %endif
 
 # flashrom is only available on these arches
@@ -46,75 +50,71 @@
 %global have_msr 1
 %endif
 
-# Until we actually have seen it outside x86
-%ifarch i686 x86_64
-%global have_thunderbolt 1
-%endif
-
 # only available recently
 %if 0%{?fedora} >= 30
 %global have_modem_manager 1
 %endif
 
+%if 0%{?fedora}
+%global have_passim 1
+%endif
+
 Summary:   Firmware update daemon
 Name:      fwupd
-Version:   1.9.31
-Release:   %autorelease
+Version:   2.0.19
+Release:   %autorelease -e 1
 License:   LGPL-2.1-or-later
 URL:       https://github.com/fwupd/fwupd
 Source0:   http://people.freedesktop.org/~hughsient/releases/%{name}-%{version}.tar.xz
+%if 0%{?libfwupd_19x_version}
+Source2:   https://github.com/fwupd/%{name}/releases/download/1.9.%{libfwupd_19x_version}/%{name}-1.9.%{libfwupd_19x_version}.tar.xz
+%endif
 
-Source10:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20100307-x64.cab
-Source11:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20140413-x64.cab
-Source12:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20160809-x64.cab
-Source13:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20200729-aa64.cab
-Source14:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20200729-ia32.cab
-Source15:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20200729-x64.cab
-Source16:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20210429-x64.cab
-Source17:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-aa64.cab
-Source18:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-ia32.cab
-Source19:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20220812-x64.cab
-Source20:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-aa64.cab
-Source21:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-ia32.cab
-Source22:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20230509-x64.cab
-Source23:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20241101-x64.cab
-Source24:  http://people.redhat.com/rhughes/dbx/DBXUpdate-20250507-legacy-x64.cab
+Source24:  https://fwupd.org/downloads/40d3a4630619b83026f66bc64d97a582bbd9223ad53aa3f519ff5e2121d11ca6-DBXUpdate-20250507-x64.cab
 
 BuildRequires: gettext
+BuildRequires: hwdata
 BuildRequires: glib2-devel >= %{glib2_version}
 BuildRequires: libxmlb-devel >= %{libxmlb_version}
-BuildRequires: libgudev1-devel
-BuildRequires: libgusb-devel >= %{libgusb_version}
+BuildRequires: libusb1-devel >= %{libusb_version}
 BuildRequires: libcurl-devel >= %{libcurl_version}
 BuildRequires: libjcat-devel >= %{libjcat_version}
 BuildRequires: polkit-devel >= 0.103
+BuildRequires: protobuf-c-devel
 BuildRequires: python3-packaging
 BuildRequires: python3-jinja2
 BuildRequires: sqlite-devel
 BuildRequires: systemd >= %{systemd_version}
 BuildRequires: systemd-devel
 BuildRequires: libarchive-devel
+BuildRequires: libcbor-devel
+BuildRequires: libblkid-devel
+BuildRequires: readline-devel
+BuildRequires: libmnl-devel
+%if 0%{?have_passim}
+BuildRequires: passim-devel
+%endif
 BuildRequires: gobject-introspection-devel
 %ifarch %{valgrind_arches}
 BuildRequires: valgrind
 BuildRequires: valgrind-devel
 %endif
+%if 0%{?have_gi_docgen}
 BuildRequires: gi-docgen
+%endif
 BuildRequires: gnutls-devel
 BuildRequires: gnutls-utils
 BuildRequires: meson
 BuildRequires: json-glib-devel >= %{json_glib_version}
 BuildRequires: vala
-%if 0%{?fedora} >= 41
-BuildRequires: bash-completion-devel
-%else
-BuildRequires: bash-completion
-%endif
+BuildRequires: pkgconfig(bash-completion)
 BuildRequires: git-core
 %if 0%{?have_flashrom}
 BuildRequires: flashrom-devel >= 1.2-2
 %endif
 BuildRequires: libdrm-devel
+# For fu-polkit-test
+BuildRequires: polkit
 
 %if 0%{?have_modem_manager}
 BuildRequires: ModemManager-glib-devel >= 1.10.0
@@ -138,15 +138,33 @@ Requires(postun): systemd
 
 Requires: glib2%{?_isa} >= %{glib2_version}
 Requires: libxmlb%{?_isa} >= %{libxmlb_version}
-Requires: libgusb%{?_isa} >= %{libgusb_version}
 Requires: shared-mime-info
+
+# deliberately has no _isa as libusbx in RHEL-9 does not include it
+Requires: libusb1 >= %{libusb_version}
+
+%if 0%{?rhel} > 7 || 0%{?fedora} > 28
+Recommends: python3
+%endif
 
 Obsoletes: dbxtool < 9
 Provides: dbxtool
 
+%if 0%{?rhel} > 7
+Obsoletes: fwupdate < 11-4
+Obsoletes: fwupdate-efi < 11-4
+
+Provides: fwupdate
+Provides: fwupdate-efi
+%endif
+
 # optional, but a really good idea
 Recommends: udisks2
+Recommends: bluez
 Recommends: jq
+%if 0%{?have_passim}
+Recommends: passim
+%endif
 
 %if 0%{?have_modem_manager}
 Recommends: %{name}-plugin-modem-manager
@@ -213,10 +231,37 @@ or server machines.
 %prep
 %autosetup -p1
 
+# and the old version for libfwupd1
+%if 0%{?libfwupd_19x_version}
+tar xfs %{SOURCE2}
+%endif
+
 %build
 
+%if 0%{?libfwupd_19x_version}
+cd fwupd-1.9.%{libfwupd_19x_version}
 %meson \
+    -Dbuild=library \
+    -Ddocs=disabled \
+    -Dcbor=disabled \
+    -Dpolkit=disabled \
+    -Dtests=false \
+    -Dbash_completion=false \
+    -Dplugin_msr=disabled \
+    -Dintrospection=disabled \
+    -Dlaunchd=disabled
+%meson_build
+cd -
+%endif
+
+%meson \
+    -Dsupported_build=enabled \
+    -Dumockdev_tests=disabled \
+%if 0%{?have_gi_docgen}
     -Ddocs=enabled \
+%else
+    -Ddocs=disabled \
+%endif
 %if 0%{?enable_tests}
     -Dtests=true \
 %else
@@ -227,26 +272,9 @@ or server machines.
 %else
     -Dplugin_flashrom=disabled \
 %endif
-%if 0%{?have_msr}
-    -Dplugin_msr=enabled \
-%else
-    -Dplugin_msr=disabled \
-%endif
-%if 0%{?have_gpio}
-    -Dplugin_gpio=enabled \
-%else
-    -Dplugin_gpio=disabled \
-%endif
 %if 0%{?have_uefi}
-    -Dplugin_uefi_capsule=enabled \
-    -Dplugin_uefi_pk=enabled \
-    -Dplugin_tpm=enabled \
     -Defi_binary=false \
     -Defi_os_dir=%{efi_vendor} \
-%else
-    -Dplugin_uefi_capsule=disabled \
-    -Dplugin_uefi_pk=disabled \
-    -Dplugin_tpm=disabled \
 %endif
 %if 0%{?have_modem_manager}
     -Dplugin_modem_manager=enabled \
@@ -254,22 +282,20 @@ or server machines.
     -Dplugin_modem_manager=disabled \
 %endif
     -Dbluez=disabled \
-    -Dcbor=disabled \
-    -Dlaunchd=disabled \
     -Dlvfs=disabled \
-    -Dman=true \
+%if 0%{?have_passim}
+    -Dpassim=enabled \
+%else
     -Dpassim=disabled \
-    -Dplugin_android_boot=disabled \
-    -Dplugin_cfu=disabled \
-    -Dplugin_igsc=disabled \
-    -Dplugin_intel_me=disabled \
-    -Dplugin_logitech_bulkcontroller=disabled \
-    -Dplugin_logitech_scribe=disabled \
-    -Dplugin_mtd=disabled \
-    -Dplugin_powerd=disabled \
-    -Dplugin_uf2=disabled \
-    -Dsupported_build=enabled \
-    -Dsystemd_unit_user=""
+%endif
+%ifarch %{valgrind_arches}
+    -Dvalgrind=enabled \
+%else
+    -Dvalgrind=disabled \
+%endif
+    -Dman=true \
+    -Dsystemd_unit_user="" \
+    -Dbluez=enabled
 
 %meson_build
 
@@ -279,14 +305,18 @@ or server machines.
 %endif
 
 %install
+
+%if 0%{?libfwupd_19x_version}
+cd fwupd-1.9.%{libfwupd_19x_version}
+%meson_install
+cd -
+%endif
+
 %meson_install
 
 # on RHEL the LVFS is disabled by default
-mkdir -p %{buildroot}/%{_datadir}/dbxtool
 install \
-  %{SOURCE10} %{SOURCE11} %{SOURCE12} %{SOURCE13} %{SOURCE14} %{SOURCE15} \
-  %{SOURCE16} %{SOURCE17} %{SOURCE18} %{SOURCE19} %{SOURCE20} %{SOURCE21} \
-  %{SOURCE22} %{SOURCE23} %{SOURCE24} \
+  %{SOURCE24} \
   %{buildroot}/%{_datadir}/fwupd/remotes.d/vendor/firmware/
 
 mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd/gnupg
@@ -298,13 +328,6 @@ mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/cache/fwupd
 
 %post
 %systemd_post fwupd.service fwupd-refresh.timer
-
-# change vendor-installed remotes to use the default keyring type
-for fn in /etc/fwupd/remotes.d/*.conf; do
-    if grep -q "Keyring=gpg" "$fn"; then
-        sed -i 's/Keyring=gpg/#Keyring=pkcs/g' "$fn";
-    fi
-done
 
 %preun
 %systemd_preun fwupd.service fwupd-refresh.timer
@@ -325,8 +348,9 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 %ifarch x86_64
 %{_libexecdir}/fwupd/fwupd-detect-cet
 %endif
-%{_libexecdir}/fwupd/fwupdoffline
+%if 0%{?have_uefi}
 %{_bindir}/dbxtool
+%endif
 %{_bindir}/fwupdmgr
 %{_bindir}/fwupdtool
 %dir %{_sysconfdir}/fwupd
@@ -341,6 +365,7 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 %if 0%{?have_msr}
 /usr/lib/modules-load.d/fwupd-msr.conf
 %endif
+/usr/lib/modules-load.d/fwupd-i2c.conf
 %{_datadir}/dbus-1/system.d/org.freedesktop.fwupd.conf
 %{_datadir}/bash-completion/completions/fwupdmgr
 %{_datadir}/bash-completion/completions/fwupdtool
@@ -351,39 +376,43 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 %dir %{_datadir}/fwupd/remotes.d
 %dir %{_datadir}/fwupd/remotes.d/vendor
 %dir %{_datadir}/fwupd/remotes.d/vendor/firmware
-%{_datadir}/fwupd/remotes.d/vendor/firmware/README.md
 %{_datadir}/fwupd/remotes.d/vendor/firmware/*.cab
+%{_datadir}/fwupd/remotes.d/vendor/firmware/README.md
 %{_datadir}/dbus-1/interfaces/org.freedesktop.fwupd.xml
 %{_datadir}/polkit-1/actions/org.freedesktop.fwupd.policy
 %{_datadir}/polkit-1/rules.d/org.freedesktop.fwupd.rules
 %{_datadir}/dbus-1/system-services/org.freedesktop.fwupd.service
 %{_mandir}/man1/fwupdtool.1*
+%if 0%{?have_uefi}
 %{_mandir}/man1/dbxtool.*
+%endif
 %{_mandir}/man1/fwupdmgr.1*
 %{_mandir}/man5/*
 %{_mandir}/man8/*
 %{_datadir}/metainfo/org.freedesktop.fwupd.metainfo.xml
-%{_datadir}/icons/hicolor/scalable/apps/org.freedesktop.fwupd.svg
+%{_datadir}/icons/hicolor/*/apps/org.freedesktop.fwupd.*
 %{_datadir}/fwupd/firmware_packager.py
 %{_datadir}/fwupd/simple_client.py
 %{_datadir}/fwupd/add_capsule_header.py
 %{_datadir}/fwupd/install_dell_bios_exe.py
-%{_unitdir}/fwupd-offline-update.service
 %{_unitdir}/fwupd.service
 %{_unitdir}/fwupd-refresh.service
 %{_unitdir}/fwupd-refresh.timer
-%{_unitdir}/system-update.target.wants/
 %dir %{_localstatedir}/lib/fwupd
 %dir %{_localstatedir}/cache/fwupd
 %dir %{_datadir}/fwupd/quirks.d
 %{_datadir}/fwupd/quirks.d/builtin.quirk.gz
+%if 0%{?have_gi_docgen}
 %{_datadir}/doc/fwupd/*.html
+%endif
 %if 0%{?have_uefi}
 %config(noreplace)%{_sysconfdir}/grub.d/35_fwupd
 %endif
+%if 0%{?libfwupd_19x_version}
 %{_libdir}/libfwupd.so.2*
+%endif
+%{_libdir}/libfwupd.so.3*
 %{_libdir}/girepository-1.0/Fwupd-2.0.typelib
-/usr/lib/udev/rules.d/*.rules
 /usr/lib/systemd/system-shutdown/fwupd.shutdown
 %dir %{_libdir}/fwupd-%{version}
 %{_libdir}/fwupd-%{version}/libfwupd*.so
@@ -404,43 +433,45 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 
 %files devel
 %{_datadir}/gir-1.0/Fwupd-2.0.gir
+%if 0%{?have_gi_docgen}
 %{_datadir}/doc/fwupd/libfwupdplugin
 %{_datadir}/doc/fwupd/libfwupd
 %{_datadir}/doc/libfwupdplugin
 %{_datadir}/doc/libfwupd
+%endif
 %{_datadir}/vala/vapi
+%if 0%{?libfwupd_19x_version}
 %{_includedir}/fwupd-1
-%{_libdir}/libfwupd*.so
+%endif
+%{_includedir}/fwupd-3
+%{_libdir}/libfwupd.so
 %{_libdir}/pkgconfig/fwupd.pc
 
 %files tests
 %if 0%{?enable_tests}
 %{_datadir}/fwupd/host-emulate.d/*.json.gz
-%dir %{_datadir}/installed-tests/fwupd
-%{_datadir}/installed-tests/fwupd/tests/*
-%{_datadir}/installed-tests/fwupd/fwupd-tests.xml
-%{_datadir}/installed-tests/fwupd/*.test
-%{_datadir}/installed-tests/fwupd/*.cab
-%{_datadir}/installed-tests/fwupd/fakedevice124.jcat
-%{_datadir}/installed-tests/fwupd/fakedevice124.bin
-%{_datadir}/installed-tests/fwupd/fakedevice124.metainfo.xml
-%{_datadir}/installed-tests/fwupd/*.sh
-%{_datadir}/installed-tests/fwupd/*.zip
-%if 0%{?have_uefi}
-%{_datadir}/installed-tests/fwupd/efi
-%endif
-%{_datadir}/installed-tests/fwupd/chassis_type
-%{_datadir}/installed-tests/fwupd/sys_vendor
-# libgusb >= 0.4.5
-%if 0%{?fedora} >= 37 || 0%{?rhel} >= 10
-%{_datadir}/fwupd/device-tests/*.json
-%endif
-%{_libexecdir}/installed-tests/fwupd/*
+%{_datadir}/installed-tests/fwupd
+%{_libexecdir}/installed-tests/fwupd
 %{_datadir}/fwupd/remotes.d/fwupd-tests.conf
 %endif
 
 %changelog
 ## START: Generated by rpmautospec
+* Mon Mar 09 2026 Tomas Pelka <tpelka@redhat.com> - 2.0.19-4.1
+- bump release to overcome "GenericError: Target build already exists"
+
+* Mon Mar 09 2026 Richard Hughes <richard@hughsie.com> - 2.0.19-3
+- Use the accidentally-dropped efi_os_dir
+
+* Tue Dec 23 2025 Louis Abel <label@rockylinux.org> - 2.0.19-2
+- Ensure valgrind is disabled on arches without valgrind
+
+* Fri Dec 19 2025 Richard Hughes <richard@hughsie.com> - 2.0.19-1
+- Rebase to latest upstream version
+
+* Tue Sep 16 2025 Tomas Pelka <tpelka@redhat.com> - 1.9.31-2
+- Sync the content of main.fmf from rhel9 to rhel10
+
 * Fri Jul 11 2025 Richard Hughes <richard@hughsie.com> - 1.9.31-1
 - Rebase to latest upstream version
 
