@@ -2,14 +2,14 @@
 ## (rpmautospec version 0.6.5)
 ## RPMAUTOSPEC: autorelease, autochangelog
 %define autorelease(e:s:pb:n) %{?-p:0.}%{lua:
-    release_number = 4;
+    release_number = 1;
     base_release_number = tonumber(rpm.expand("%{?-b*}%{!?-b:1}"));
     print(release_number + base_release_number - 1);
 }%{?-e:.%{-e*}}%{?-s:.%{-s*}}%{!?-n:%{?dist}}
 ## END: Set by rpmautospec
 
 %global glib2_version 2.68.0
-%global libxmlb_version 0.1.3
+%global libxmlb_version 0.3.24
 %global libusb_version 1.0.9
 %global libcurl_version 7.62.0
 %global libjcat_version 0.1.0
@@ -37,13 +37,8 @@
 %endif
 
 # fwupd.efi is only available on these arches
-%ifarch x86_64 aarch64 riscv64
+%ifarch x86_64 aarch64 riscv64 loongarch64
 %global have_uefi 1
-%endif
-
-# flashrom is only available on these arches
-%ifarch i686 x86_64 armv7hl aarch64 ppc64le riscv64
-%global have_flashrom 1
 %endif
 
 %ifarch i686 x86_64
@@ -61,8 +56,8 @@
 
 Summary:   Firmware update daemon
 Name:      fwupd
-Version:   2.0.19
-Release:   %autorelease -e 1
+Version:   2.1.6
+Release:   %autorelease
 License:   LGPL-2.1-or-later
 URL:       https://github.com/fwupd/fwupd
 Source0:   http://people.freedesktop.org/~hughsient/releases/%{name}-%{version}.tar.xz
@@ -70,7 +65,10 @@ Source0:   http://people.freedesktop.org/~hughsient/releases/%{name}-%{version}.
 Source2:   https://github.com/fwupd/%{name}/releases/download/1.9.%{libfwupd_19x_version}/%{name}-1.9.%{libfwupd_19x_version}.tar.xz
 %endif
 
-Source24:  https://fwupd.org/downloads/40d3a4630619b83026f66bc64d97a582bbd9223ad53aa3f519ff5e2121d11ca6-DBXUpdate-20250507-x64.cab
+Source24:  https://fwupd.org/downloads/9edea8bc287bf9bf4659856b28cf421f330eb2f658c163eab0a03512a98c0e78-DBXUpdate-20260402-x64.cab
+
+Patch1:    0001-Fix-the-seal-self-tests-when-building-on-a-tmpfs.patch
+Patch2:    0001-Seal-memfds-for-compatibility-with-newer-fwupd-daemo.patch
 
 BuildRequires: gettext
 BuildRequires: hwdata
@@ -80,20 +78,14 @@ BuildRequires: libusb1-devel >= %{libusb_version}
 BuildRequires: libcurl-devel >= %{libcurl_version}
 BuildRequires: libjcat-devel >= %{libjcat_version}
 BuildRequires: polkit-devel >= 0.103
-BuildRequires: protobuf-c-devel
 BuildRequires: python3-packaging
 BuildRequires: python3-jinja2
 BuildRequires: sqlite-devel
 BuildRequires: systemd >= %{systemd_version}
 BuildRequires: systemd-devel
-BuildRequires: libarchive-devel
-BuildRequires: libcbor-devel
 BuildRequires: libblkid-devel
 BuildRequires: readline-devel
 BuildRequires: libmnl-devel
-%if 0%{?have_passim}
-BuildRequires: passim-devel
-%endif
 BuildRequires: gobject-introspection-devel
 %ifarch %{valgrind_arches}
 BuildRequires: valgrind
@@ -109,9 +101,6 @@ BuildRequires: json-glib-devel >= %{json_glib_version}
 BuildRequires: vala
 BuildRequires: pkgconfig(bash-completion)
 BuildRequires: git-core
-%if 0%{?have_flashrom}
-BuildRequires: flashrom-devel >= 1.2-2
-%endif
 BuildRequires: libdrm-devel
 # For fu-polkit-test
 BuildRequires: polkit
@@ -150,6 +139,10 @@ Recommends: python3
 Obsoletes: dbxtool < 9
 Provides: dbxtool
 
+# this was removed in 2.1.4
+Obsoletes: %{name}-plugin-flashrom < 2.1.4
+Obsoletes: %{name}-plugin-flashrom-debuginfo < 2.1.4
+
 %if 0%{?rhel} > 7
 Obsoletes: fwupdate < 11-4
 Obsoletes: fwupdate-efi < 11-4
@@ -168,9 +161,6 @@ Recommends: passim
 
 %if 0%{?have_modem_manager}
 Recommends: %{name}-plugin-modem-manager
-%endif
-%if 0%{?have_flashrom}
-Recommends: %{name}-plugin-flashrom
 %endif
 %if 0%{?have_uefi}
 Recommends: %{name}-efi
@@ -206,16 +196,6 @@ This provides the optional package which is only required on hardware that
 might have mobile broadband hardware. It is probably not required on servers.
 %endif
 
-%if 0%{?have_flashrom}
-%package plugin-flashrom
-Summary: fwupd plugin using flashrom
-Requires: %{name}%{?_isa} = %{version}-%{release}
-
-%description plugin-flashrom
-This provides the optional package which is only required on hardware that
-can be flashed using flashrom. It is probably not required on servers.
-%endif
-
 %if 0%{?have_uefi}
 %package plugin-uefi-capsule-data
 Summary: Localized data for the UEFI UX capsule
@@ -229,11 +209,14 @@ or server machines.
 %endif
 
 %prep
-%autosetup -p1
+%setup -q
+%patch 1 -p1
 
 # and the old version for libfwupd1
 %if 0%{?libfwupd_19x_version}
 tar xfs %{SOURCE2}
+cd fwupd-1.9.%{libfwupd_19x_version}
+%patch 2 -p1
 %endif
 
 %build
@@ -249,13 +232,13 @@ cd fwupd-1.9.%{libfwupd_19x_version}
     -Dbash_completion=false \
     -Dplugin_msr=disabled \
     -Dintrospection=disabled \
+    -Dplugin_logitech_bulkcontroller=disabled \
     -Dlaunchd=disabled
 %meson_build
 cd -
 %endif
 
 %meson \
-    -Dsupported_build=enabled \
     -Dumockdev_tests=disabled \
 %if 0%{?have_gi_docgen}
     -Ddocs=enabled \
@@ -266,11 +249,6 @@ cd -
     -Dtests=true \
 %else
     -Dtests=false \
-%endif
-%if 0%{?have_flashrom}
-    -Dplugin_flashrom=enabled \
-%else
-    -Dplugin_flashrom=disabled \
 %endif
 %if 0%{?have_uefi}
     -Defi_binary=false \
@@ -288,6 +266,11 @@ cd -
 %else
     -Dpassim=disabled \
 %endif
+%ifarch i686 x86_64
+    -Dhsi=enabled \
+%else
+    -Dhsi=disabled \
+%endif
 %ifarch %{valgrind_arches}
     -Dvalgrind=enabled \
 %else
@@ -295,7 +278,8 @@ cd -
 %endif
     -Dman=true \
     -Dsystemd_unit_user="" \
-    -Dbluez=enabled
+    -Dbluez=enabled \
+    -Dsupported_build=enabled
 
 %meson_build
 
@@ -305,13 +289,11 @@ cd -
 %endif
 
 %install
-
 %if 0%{?libfwupd_19x_version}
 cd fwupd-1.9.%{libfwupd_19x_version}
 %meson_install
 cd -
 %endif
-
 %meson_install
 
 # on RHEL the LVFS is disabled by default
@@ -319,7 +301,7 @@ install \
   %{SOURCE24} \
   %{buildroot}/%{_datadir}/fwupd/remotes.d/vendor/firmware/
 
-mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd/gnupg
+mkdir -p --mode=0700 $RPM_BUILD_ROOT%{_localstatedir}/lib/fwupd
 
 # workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1757948
 mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/cache/fwupd
@@ -358,6 +340,7 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 %{_sysconfdir}/fwupd/bios-settings.d/README.md
 %dir %{_sysconfdir}/fwupd/remotes.d
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/lvfs.conf
+%config(noreplace)%{_sysconfdir}/fwupd/remotes.d/lvfs-embargo.conf
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/lvfs-testing.conf
 %config(noreplace)%{_sysconfdir}/fwupd/remotes.d/vendor-directory.conf
 %config(noreplace)%{_sysconfdir}/pki/fwupd
@@ -416,19 +399,14 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 /usr/lib/systemd/system-shutdown/fwupd.shutdown
 %dir %{_libdir}/fwupd-%{version}
 %{_libdir}/fwupd-%{version}/libfwupd*.so
-%ghost %{_localstatedir}/lib/fwupd/gnupg
 
 %if 0%{?have_modem_manager}
 %files plugin-modem-manager
 %{_libdir}/fwupd-%{version}/libfu_plugin_modem_manager.so
 %endif
-%if 0%{?have_flashrom}
-%files plugin-flashrom
-%{_libdir}/fwupd-%{version}/libfu_plugin_flashrom.so
-%endif
 %if 0%{?have_uefi}
 %files plugin-uefi-capsule-data
-%{_datadir}/fwupd/uefi-capsule-ux.tar.xz
+%{_datadir}/fwupd/uefi-capsule-ux.zip
 %endif
 
 %files devel
@@ -457,10 +435,10 @@ systemctl --no-reload preset fwupd-refresh.timer &>/dev/null || :
 
 %changelog
 ## START: Generated by rpmautospec
-* Mon Mar 09 2026 Tomas Pelka <tpelka@redhat.com> - 2.0.19-4.1
-- bump release to overcome "GenericError: Target build already exists"
+* Fri Jul 03 2026 Richard Hughes <richard@hughsie.com> - 2.1.6-1
+- Rebase to 2.1.6
 
-* Mon Mar 09 2026 Richard Hughes <richard@hughsie.com> - 2.0.19-3
+* Thu Feb 26 2026 Richard Hughes <richard@hughsie.com> - 2.0.19-3
 - Use the accidentally-dropped efi_os_dir
 
 * Tue Dec 23 2025 Louis Abel <label@rockylinux.org> - 2.0.19-2

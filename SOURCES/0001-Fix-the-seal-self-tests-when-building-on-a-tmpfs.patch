@@ -1,0 +1,209 @@
+From 2ed98c7c2e0ac77b9967933af51615385f7e471d Mon Sep 17 00:00:00 2001
+From: Richard Hughes <richard@hughsie.com>
+Date: Thu, 2 Jul 2026 14:47:33 +0100
+Subject: [PATCH] Fix the seal self tests when building on a tmpfs
+
+When fwupd is exploded onto a tmpfs the assumption of 'is a local file *not* a
+memfd' breaks. When fwupd is built using rpmbuild we do not control the
+buildroot filesystem, so make the 'is a sealed fd required' check more explicit.
+---
+ src/fu-dbus-daemon.c                     |  3 +
+ src/fu-engine.c                          |  6 ++
+ src/fu-unix-seekable-input-stream-test.c | 17 +++++-
+ src/fu-unix-seekable-input-stream.c      | 70 ++++++++++++++++--------
+ src/fu-unix-seekable-input-stream.h      |  2 +
+ 5 files changed, 73 insertions(+), 25 deletions(-)
+
+diff --git a/src/fu-dbus-daemon.c b/src/fu-dbus-daemon.c
+index 72cc36fad..de8aa9a26 100644
+--- a/src/fu-dbus-daemon.c
++++ b/src/fu-dbus-daemon.c
+@@ -1158,6 +1158,9 @@ fu_dbus_daemon_invocation_get_input_stream(GDBusMethodInvocation *invocation, GE
+ 	stream = fu_unix_seekable_input_stream_new(g_steal_fd(&fd), TRUE, error);
+ 	if (stream == NULL)
+ 		return NULL;
++	if (!fu_unix_seekable_input_stream_require_seal(FU_UNIX_SEEKABLE_INPUT_STREAM(stream),
++							error))
++		return NULL;
+ 	return g_steal_pointer(&stream);
+ #else
+ 	g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_INTERNAL, "unsupported feature");
+diff --git a/src/fu-engine.c b/src/fu-engine.c
+index 9eaed95ab..5820ea891 100644
+--- a/src/fu-engine.c
++++ b/src/fu-engine.c
+@@ -5069,9 +5069,15 @@ fu_engine_update_metadata(FuEngine *self,
+ 	stream_fd = fu_unix_seekable_input_stream_new(fd, TRUE, error);
+ 	if (stream_fd == NULL)
+ 		return FALSE;
++	if (!fu_unix_seekable_input_stream_require_seal(FU_UNIX_SEEKABLE_INPUT_STREAM(stream_fd),
++							error))
++		return FALSE;
+ 	stream_sig = fu_unix_seekable_input_stream_new(fd_sig, TRUE, error);
+ 	if (stream_sig == NULL)
+ 		return FALSE;
++	if (!fu_unix_seekable_input_stream_require_seal(FU_UNIX_SEEKABLE_INPUT_STREAM(stream_sig),
++							error))
++		return FALSE;
+ 
+ 	/* read the entire file into memory */
+ 	bytes_raw =
+diff --git a/src/fu-unix-seekable-input-stream-test.c b/src/fu-unix-seekable-input-stream-test.c
+index d65b70add..3b5e8d8ec 100644
+--- a/src/fu-unix-seekable-input-stream-test.c
++++ b/src/fu-unix-seekable-input-stream-test.c
+@@ -84,6 +84,7 @@ static void
+ fu_unix_seekable_input_stream_sealed_memfd_func(void)
+ {
+ #if defined(HAVE_GIO_UNIX) && defined(HAVE_MEMFD_CREATE)
++	gboolean ret;
+ 	g_autofd gint fd = -1;
+ 	g_autoptr(GError) error = NULL;
+ 	g_autoptr(GInputStream) stream = NULL;
+@@ -93,11 +94,18 @@ fu_unix_seekable_input_stream_sealed_memfd_func(void)
+ 	g_assert_cmpint(fd, >=, 0);
+ 	g_assert_cmpint(write(fd, data, sizeof(data)), ==, sizeof(data));
+ 	g_assert_cmpint(lseek(fd, 0, SEEK_SET), ==, 0);
+-	g_assert_cmpint(fcntl(fd, F_ADD_SEALS, F_SEAL_WRITE | F_SEAL_SHRINK | F_SEAL_GROW), ==, 0);
++	g_assert_cmpint(
++	    fcntl(fd, F_ADD_SEALS, F_SEAL_SEAL | F_SEAL_WRITE | F_SEAL_SHRINK | F_SEAL_GROW),
++	    ==,
++	    0);
+ 
+ 	stream = fu_unix_seekable_input_stream_new(g_steal_fd(&fd), TRUE, &error);
+ 	g_assert_no_error(error);
+ 	g_assert_nonnull(stream);
++	ret = fu_unix_seekable_input_stream_require_seal(FU_UNIX_SEEKABLE_INPUT_STREAM(stream),
++							 &error);
++	g_assert_no_error(error);
++	g_assert_true(ret);
+ #else
+ 	g_test_skip("No gio-unix-2.0 or memfd_create support, skipping");
+ #endif
+@@ -107,6 +115,7 @@ static void
+ fu_unix_seekable_input_stream_unsealed_memfd_func(void)
+ {
+ #if defined(HAVE_GIO_UNIX) && defined(HAVE_MEMFD_CREATE)
++	gboolean ret;
+ 	g_autofd gint fd = -1;
+ 	g_autoptr(GError) error = NULL;
+ 	g_autoptr(GInputStream) stream = NULL;
+@@ -118,8 +127,12 @@ fu_unix_seekable_input_stream_unsealed_memfd_func(void)
+ 	g_assert_cmpint(lseek(fd, 0, SEEK_SET), ==, 0);
+ 
+ 	stream = fu_unix_seekable_input_stream_new(g_steal_fd(&fd), TRUE, &error);
++	g_assert_no_error(error);
++	g_assert_nonnull(stream);
++	ret = fu_unix_seekable_input_stream_require_seal(FU_UNIX_SEEKABLE_INPUT_STREAM(stream),
++							 &error);
+ 	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+-	g_assert_null(stream);
++	g_assert_false(ret);
+ #else
+ 	g_test_skip("No gio-unix-2.0 or memfd_create support, skipping");
+ #endif
+diff --git a/src/fu-unix-seekable-input-stream.c b/src/fu-unix-seekable-input-stream.c
+index 4955c366c..591173812 100644
+--- a/src/fu-unix-seekable-input-stream.c
++++ b/src/fu-unix-seekable-input-stream.c
+@@ -116,25 +116,6 @@ fu_unix_seekable_input_stream_seekable_iface_init(GSeekableIface *iface)
+ 	iface->truncate_fn = fu_unix_seekable_input_stream_truncate;
+ }
+ 
+-static gboolean
+-fu_unix_seekable_input_stream_verify_sealed(gint fd, GError **error)
+-{
+-#ifdef HAVE_MEMFD_CREATE
+-	gint seals = fcntl(fd, F_GET_SEALS);
+-	if (seals >= 0 && (seals & (F_SEAL_WRITE | F_SEAL_SHRINK | F_SEAL_GROW)) !=
+-			      (F_SEAL_WRITE | F_SEAL_SHRINK | F_SEAL_GROW)) {
+-		g_set_error(error,
+-			    FWUPD_ERROR,
+-			    FWUPD_ERROR_INVALID_FILE,
+-			    "fd is missing required seals, got 0x%x",
+-			    (guint)seals);
+-		return FALSE;
+-	}
+-#endif
+-	/* success */
+-	return TRUE;
+-}
+-
+ /**
+  * fu_unix_seekable_input_stream_new:
+  * @fd: a UNIX file descriptor
+@@ -177,14 +158,57 @@ fu_unix_seekable_input_stream_new(gint fd, gboolean close_fd, GError **error)
+ 		return NULL;
+ 	}
+ 
+-	/* if the fd supports sealing (i.e. is a memfd) then require immutability */
+-	if (!fu_unix_seekable_input_stream_verify_sealed(fd, error))
+-		return NULL;
+-
+ 	/* success */
+ 	return g_steal_pointer(&stream);
+ }
+ 
++/**
++ * fu_unix_seekable_input_stream_require_seal:
++ * @stream: a #FuUnixSeekableInputStream
++ * @error: (nullable): optional return location for an error
++ *
++ * Enforces that the file descriptor backing this stream is a memfd with the required seals set.
++ *
++ * Returns: %TRUE if sealed
++ *
++ * Since: 2.1.7
++ **/
++gboolean
++fu_unix_seekable_input_stream_require_seal(FuUnixSeekableInputStream *stream, GError **error)
++{
++#ifdef HAVE_MEMFD_CREATE
++	gint fd;
++	gint seals;
++
++	g_return_val_if_fail(FU_IS_UNIX_SEEKABLE_INPUT_STREAM(stream), FALSE);
++	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
++
++	fd = g_unix_input_stream_get_fd(G_UNIX_INPUT_STREAM(stream));
++	seals = fcntl(fd, F_GET_SEALS);
++	if (seals < 0) {
++		/* not supported on this fd */
++		return TRUE;
++	}
++	if ((seals & F_SEAL_SEAL) == 0) {
++		g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE, "fd not sealed");
++		return FALSE;
++	}
++	if ((seals & F_SEAL_WRITE) == 0) {
++		g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE, "no WRITE seal");
++		return FALSE;
++	}
++	if ((seals & F_SEAL_SHRINK) == 0) {
++		g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE, "no SHRINK seal");
++		return FALSE;
++	}
++	if ((seals & F_SEAL_GROW) == 0) {
++		g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE, "no GROW seal");
++		return FALSE;
++	}
++#endif
++	return TRUE;
++}
++
+ static void
+ fu_unix_seekable_input_stream_class_init(FuUnixSeekableInputStreamClass *klass)
+ {
+diff --git a/src/fu-unix-seekable-input-stream.h b/src/fu-unix-seekable-input-stream.h
+index 5f0a0656a..6d7b2acde 100644
+--- a/src/fu-unix-seekable-input-stream.h
++++ b/src/fu-unix-seekable-input-stream.h
+@@ -18,3 +18,5 @@ G_DECLARE_FINAL_TYPE(FuUnixSeekableInputStream,
+ 
+ GInputStream *
+ fu_unix_seekable_input_stream_new(gint fd, gboolean close_fd, GError **error);
++gboolean
++fu_unix_seekable_input_stream_require_seal(FuUnixSeekableInputStream *stream, GError **error);
+-- 
+2.54.0
+
